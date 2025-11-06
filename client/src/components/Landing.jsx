@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 import Spline from '@splinetool/react-spline'
 import ParticlesBG from './Particles'
 import BitcoinBurst from './BitcoinBurst'
@@ -8,6 +8,225 @@ import { motion } from 'framer-motion'
 export default function Landing() {
   const [email, setEmail] = useState('')
   const [subscribed, setSubscribed] = useState(false)
+  const robotRef = useRef(null)
+  const splineInstance = useRef(null)
+  const headNode = useRef(null)
+  const upperNode = useRef(null)
+
+  // helper: recursively search a three.js scene graph for a node by name
+  function findNodeByName(root, name) {
+    if (!root) return null
+    if (root.name === name) return root
+    if (root.children && root.children.length) {
+      for (let i = 0; i < root.children.length; i++) {
+        const found = findNodeByName(root.children[i], name)
+        if (found) return found
+      }
+    }
+    return null
+  }
+  const splineAppRef = useRef(null)
+
+  // Handle Spline load to get app reference
+  function onSplineLoad(splineApp) {
+    splineAppRef.current = splineApp
+  }
+
+  // Smooth mouse follower for robot interaction - upper body only
+  useEffect(() => {
+    const wrapper = robotRef.current
+    if (!wrapper) return
+
+    let canvas = wrapper.querySelector('canvas')
+    let attempts = 0
+    const findCanvas = () => {
+      if (!canvas) canvas = wrapper.querySelector('canvas')
+      attempts += 1
+      if (!canvas && attempts < 10) setTimeout(findCanvas, 150)
+    }
+    if (!canvas) findCanvas()
+
+    const rect = () => wrapper.getBoundingClientRect()
+
+    // Start from center
+    const centerX = () => wrapper.clientWidth / 2
+    const centerY = () => wrapper.clientHeight / 2
+    
+    let target = { x: centerX(), y: centerY() }
+    let current = { ...target }
+  const normalSmoothing = 0.015 // normal lerp (0.03 - 0.15)
+  const enterSmoothing = 0.01 // very slow approach when re-entering (smaller => slower)
+
+  // keep track whether pointer is inside the wrapper bounds
+  let wasInside = false
+    let enterMode = false
+    let enterFrames = 0
+  const enterDuration = 120 // frames to remain in slow-approach mode (increase for slower re-entry)
+  let mouseWasOutsideWindow = false
+
+    function onMove(e) {
+      const r = rect()
+      const clientX = e.clientX
+      const clientY = e.clientY
+
+      // determine if pointer is inside wrapper
+      const inside = clientX >= r.left && clientX <= r.right && clientY >= r.top && clientY <= r.bottom
+
+      const mouseX = clientX - r.left
+      const mouseY = clientY - r.top
+
+      // Calculate offset from center
+      const offsetX = mouseX - centerX()
+      const offsetY = mouseY - centerY()
+
+      // Limit the movement range for upper body only
+      const maxHorizontal = wrapper.clientWidth * 0.15 // 15% of width
+      const maxVertical = wrapper.clientHeight * 0.25 // 25% of height
+
+      // Clamp the offsets
+      const clampedX = Math.max(-maxHorizontal, Math.min(maxHorizontal, offsetX))
+      const clampedY = Math.max(-maxVertical, Math.min(maxVertical, offsetY))
+
+      // If pointer just entered the wrapper area, enable slow enter mode so robot doesn't snap
+      if (inside && !wasInside) {
+        enterMode = true
+        enterFrames = 0
+      }
+
+      // If the mouse was outside the browser window and has just moved inside,
+      // force enterMode so the robot pans slowly to the new location.
+      if (mouseWasOutsideWindow) {
+        enterMode = true
+        enterFrames = 0
+        mouseWasOutsideWindow = false
+      }
+
+      wasInside = inside
+
+      // Apply clamped position relative to center
+      target.x = centerX() + clampedX
+      target.y = centerY() + clampedY
+    }
+
+    function onLeave() {
+      // Mark as outside; keep the current target so the robot continues
+      // looking at the last known location instead of snapping back to center.
+      wasInside = false
+      // do not change `target` here — keep the last position
+    }
+
+    function onWindowOut(e) {
+      // relatedTarget === null indicates the pointer moved out of the window
+      if (!e) return
+      if (e.relatedTarget === null) {
+        mouseWasOutsideWindow = true
+      }
+    }
+
+    let raf = null
+    function frame() {
+      // choose smoothing depending on whether we're in the slow enter approach
+      const smoothing = enterMode ? enterSmoothing : normalSmoothing
+
+      // lerp (linear interpolation)
+      current.x += (target.x - current.x) * smoothing
+      current.y += (target.y - current.y) * smoothing
+
+      if (enterMode) {
+        enterFrames += 1
+        if (enterFrames > enterDuration) {
+          enterMode = false
+        }
+      }
+
+      if (canvas) {
+        const r = rect()
+
+        // Reduce the magnitude of the pointer we forward to the Spline canvas
+        // so leg/whole-body reactions driven by the scene are milder.
+        // legScale: 0.5 => half the movement currently seen
+        const legScale = 0.5
+
+        // Compute center and deltas
+        const centerClientX = Math.round(r.left + centerX())
+        const centerClientY = Math.round(r.top + centerY())
+        const deltaX = current.x - centerX()
+        const deltaY = current.y - centerY()
+
+        // Cap how far we dispatch to avoid extreme rotations (prevents ~180° flips)
+        const maxDispatchX = wrapper.clientWidth * 0.25
+        const maxDispatchY = wrapper.clientHeight * 0.35
+
+        const scaledX = Math.max(-maxDispatchX, Math.min(maxDispatchX, deltaX * legScale))
+        const scaledY = Math.max(-maxDispatchY, Math.min(maxDispatchY, deltaY * legScale))
+
+        const clientX = Math.round(centerClientX + scaledX)
+        const clientY = Math.round(centerClientY + scaledY)
+
+        // dispatch smoothed (and scaled) pointer event to Spline canvas
+        try {
+          const ev = new PointerEvent('pointermove', {
+            bubbles: true,
+            clientX,
+            clientY,
+            pageX: clientX,
+            pageY: clientY,
+            pointerType: 'mouse'
+          })
+          canvas.dispatchEvent(ev)
+        } catch (err) {
+          // fallback for older browsers
+          const ev = document.createEvent('MouseEvents')
+          ev.initMouseEvent('mousemove', true, true, window, 0, 0, 0, clientX, clientY, false, false, false, false, 0, null)
+          canvas.dispatchEvent(ev)
+        }
+      }
+
+      // Head-only look: rotate the head node smoothly toward the smoothed
+      // cursor position without rotating the torso/legs. This keeps body
+      // static while the head tracks the cursor.
+      try {
+        if (headNode.current && headNode.current.rotation) {
+          const cx = wrapper.clientWidth / 2
+          const cy = wrapper.clientHeight / 2
+          // normalized -1..1 based on current smoothed position relative to center
+          const nx = Math.max(-1, Math.min(1, (current.x - cx) / (wrapper.clientWidth * 0.5)))
+          const ny = Math.max(-1, Math.min(1, (current.y - cy) / (wrapper.clientHeight * 0.5)))
+
+          // Head rotation limits (radians) - tune these for desired look range
+          const maxHeadYaw = 0.45 // left/right
+          const maxHeadPitch = 0.28 // up/down
+
+          const targetYaw = nx * maxHeadYaw
+          const targetPitch = -ny * maxHeadPitch
+
+          // Smoothly lerp head rotation toward target (smaller factor = slower)
+          const headLerp = 0.08
+          headNode.current.rotation.y += (targetYaw - headNode.current.rotation.y) * headLerp
+          headNode.current.rotation.x += (targetPitch - headNode.current.rotation.x) * headLerp
+        }
+      } catch (e) {
+        // ignore if head node not available or rotation not writable
+      }
+
+      raf = requestAnimationFrame(frame)
+    }
+
+    // Listen on window so mouse movements over overlays (like the navbar)
+    // are still captured and forwarded to the robot wrapper. Also track
+    // when the pointer leaves the browser so we can enable a slow re-entry.
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseleave', onLeave)
+    window.addEventListener('mouseout', onWindowOut)
+    raf = requestAnimationFrame(frame)
+
+    return () => {
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseleave', onLeave)
+      window.removeEventListener('mouseout', onWindowOut)
+      if (raf) cancelAnimationFrame(raf)
+    }
+  }, [])
 
   const handleSubscribe = (e) => {
     e.preventDefault()
@@ -36,7 +255,7 @@ export default function Landing() {
       {/* Hero Section */}
       <header className="relative min-h-screen flex items-center justify-center">
         <div className="fixed inset-0 z-0 bg-transparent">
-          {/* PixelBlast Background - replaces the background Spline */}
+          {/* PixelBlast Background */}
           <div className="absolute inset-0 z-0 pointer-events-none" aria-hidden="true">
             <PixelBlast
               variant="circle"
@@ -59,14 +278,51 @@ export default function Landing() {
             />
           </div>
 
-          {/* Foreground robot Spline - sits above the PixelBlast */}
-          <div className="absolute inset-0 z-10 robot-spline-wrapper pointer-events-none" aria-hidden="true">
+          {/* Foreground robot Spline with smooth mouse tracking */}
+          <div 
+            ref={robotRef} 
+            className="absolute inset-0 z-10 robot-spline-wrapper pointer-events-auto" 
+            aria-hidden="true"
+          >
             <div className="robot-spline absolute inset-0">
-              <Spline scene="https://prod.spline.design/Z61Y4LW5nGuNCM-9/scene.splinecode" />
+                <Spline
+                  scene="https://prod.spline.design/Z61Y4LW5nGuNCM-9/scene.splinecode"
+                  onLoad={(s) => {
+                    // capture instance and log structure to help if names differ
+                    splineInstance.current = s
+                    try {
+                      // try to print a compact tree to console for inspection
+                      console.log('Spline instance', s)
+                      if (s && s.scene) console.log('s.scene children:', s.scene.children)
+                    } catch (err) {
+                      console.log('Spline loaded (could not dump scene):', err)
+                    }
+
+                    // attempt best-effort find of head/upper body nodes by common names
+                    try {
+                      const root = s.scene || (s?.app && s.app.scene)
+                      if (root) {
+                        const headNames = ['Head', 'head', 'Head_GRP', 'head_grp', 'Head_Mesh']
+                        const upperNames = ['Torso', 'UpperBody', 'Chest', 'Spine', 'Upper_Body']
+                        for (const n of headNames) {
+                          const found = findNodeByName(root, n)
+                          if (found) { headNode.current = found; break }
+                        }
+                        for (const n of upperNames) {
+                          const found = findNodeByName(root, n)
+                          if (found) { upperNode.current = found; break }
+                        }
+                        console.log('Head node:', headNode.current, 'Upper node:', upperNode.current)
+                      }
+                    } catch (e) {
+                      console.warn('Could not auto-find head/upper nodes', e)
+                    }
+                  }}
+              />
             </div>
           </div>
 
-          {/* Particles sit above the Spline canvas and above the gradient so they're visible, but below the content */}
+          {/* Particles layer */}
           <ParticlesBG className="absolute inset-0 z-30 pointer-events-none" />
           <div className="absolute inset-0 z-20 bg-gradient-to-b from-black/60 via-black/30 to-black pointer-events-none" />
         </div>
@@ -75,7 +331,7 @@ export default function Landing() {
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8, delay: 0.2 }}
-          className="relative z-40 max-w-7xl mx-auto px-6 py-32 text-center"
+          className="relative z-40 max-w-7xl mx-auto px-6 py-32 text-center pointer-events-none"
         >
           <motion.h1 
             initial={{ opacity: 0, y: 20 }}
@@ -115,7 +371,7 @@ export default function Landing() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.9 }}
-            className="flex flex-col sm:flex-row gap-4 justify-center items-center"
+            className="flex flex-col sm:flex-row gap-4 justify-center items-center pointer-events-auto"
           >
             <a 
               href="#services" 
@@ -136,7 +392,7 @@ export default function Landing() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 1, delay: 1.2 }}
-          className="absolute bottom-10 left-1/2 transform -translate-x-1/2 z-30"
+          className="absolute bottom-10 left-1/2 transform -translate-x-1/2 z-50 pointer-events-none"
         >
           <motion.div
             animate={{ y: [0, 10, 0] }}
@@ -153,8 +409,8 @@ export default function Landing() {
         </motion.div>
       </header>
 
-      {/* Bitcoin coin burst overlay (click or scroll to trigger) */}
-      {/* <BitcoinBurst /> */}
+      {/* Bitcoin coin burst overlay */}
+      <BitcoinBurst />
 
       {/* Services Section */}
       <motion.section 
