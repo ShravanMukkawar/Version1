@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import Spline from '@splinetool/react-spline'
 import ParticlesBG from './Particles'
 import BitcoinBurst from './BitcoinBurst'
+import PixelBlast from './PixelBlast'
 import { motion } from 'framer-motion'
 
 export default function Landing() {
@@ -32,16 +33,34 @@ export default function Landing() {
 
   return (
     <div className="relative min-h-screen bg-black text-white overflow-x-hidden">
-  {/* Hero Section */}
+      {/* Hero Section */}
       <header className="relative min-h-screen flex items-center justify-center">
         <div className="fixed inset-0 z-0 bg-transparent">
-          {/* Background Spline scene (new) - sits behind the robot Spline */}
-          <div className="absolute inset-0 z-0 spline-bg pointer-events-none" aria-hidden>
-            <Spline scene="https://prod.spline.design/H1QS3S-3GFJMB3sJ/scene.splinecode" />
+          {/* PixelBlast Background - replaces the background Spline */}
+          <div className="absolute inset-0 z-0 pointer-events-none" aria-hidden="true">
+            <PixelBlast
+              variant="circle"
+              pixelSize={6}
+              color="#6366F1"
+              patternScale={3}
+              patternDensity={1.2}
+              pixelSizeJitter={0.5}
+              enableRipples
+              rippleSpeed={0.4}
+              rippleThickness={0.12}
+              rippleIntensityScale={1.5}
+              liquid
+              liquidStrength={0.12}
+              liquidRadius={1.2}
+              liquidWobbleSpeed={5}
+              speed={0.6}
+              edgeFade={0.25}
+              transparent
+            />
           </div>
 
-          {/* Foreground robot Spline - uses existing scene but sits above the spline-bg */}
-          <div className="absolute inset-0 z-10 robot-spline-wrapper pointer-events-none" aria-hidden>
+          {/* Foreground robot Spline - sits above the PixelBlast */}
+          <div className="absolute inset-0 z-10 robot-spline-wrapper pointer-events-none" aria-hidden="true">
             <div className="robot-spline absolute inset-0">
               <Spline scene="https://prod.spline.design/Z61Y4LW5nGuNCM-9/scene.splinecode" />
             </div>
@@ -134,8 +153,8 @@ export default function Landing() {
         </motion.div>
       </header>
 
-  {/* Bitcoin coin burst overlay (click or scroll to trigger) */}
-  <BitcoinBurst />
+      {/* Bitcoin coin burst overlay (click or scroll to trigger) */}
+      {/* <BitcoinBurst /> */}
 
       {/* Services Section */}
       <motion.section 
@@ -207,7 +226,6 @@ export default function Landing() {
             Subscribe to our newsletter for exclusive insights, market analysis, and strategic updates
           </motion.p>
           
-
           <motion.form 
             onSubmit={handleSubscribe}
             className="flex flex-col sm:flex-row gap-4 justify-center max-w-2xl mx-auto"
