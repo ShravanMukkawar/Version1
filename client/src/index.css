@@ -93,3 +93,53 @@ button:focus-visible {
   70% { transform: translate(-50%, -50%) translateY(-180px) rotate(140deg); opacity: 0.9; }
   100% { transform: translate(-50%, -50%) translateY(-260px) rotate(200deg); opacity: 0; }
 }
+
+/* Robot Spline blending: make robot canvas visually blend/transparent so background shows through */
+.robot-spline {
+  display: block;
+}
+.robot-spline canvas {
+  mix-blend-mode: screen; /* blend brighter colors with background */
+  opacity: 0.98; /* slightly transparent so bg is visible */
+  background: transparent !important;
+}
+
+/* Remove any default Spline wrapper backgrounds and ensure full-bleed canvas */
+.robot-spline, .robot-spline-wrapper {
+  background: transparent !important;
+  border-radius: 0 !important;
+  overflow: visible !important;
+}
+.robot-spline canvas { width: 100% !important; height: 100% !important; }
+
+/* Soft-edge mask so the robot canvas doesn't show a hard rectangular backdrop */
+.robot-spline {
+  -webkit-mask-image: radial-gradient(ellipse at center, rgba(0,0,0,1) 60%, rgba(0,0,0,0) 100%);
+  mask-image: radial-gradient(ellipse at center, rgba(0,0,0,1) 60%, rgba(0,0,0,0) 100%);
+}
+
+/* Background Spline (behind robot) */
+.spline-bg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.spline-bg canvas {
+  width: 100% !important;
+  height: 100% !important;
+  opacity: 0.9;
+  filter: blur(6px) saturate(1.05);
+  mix-blend-mode: normal;
+  background: transparent !important;
+}
+
+/* Ensure robot-spline wrapper fills and sits above the spline-bg */
+.robot-spline-wrapper {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}

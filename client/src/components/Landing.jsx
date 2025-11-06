@@ -34,8 +34,19 @@ export default function Landing() {
     <div className="relative min-h-screen bg-black text-white overflow-x-hidden">
   {/* Hero Section */}
       <header className="relative min-h-screen flex items-center justify-center">
-        <div className="fixed inset-0 z-0">
-          <Spline scene="https://prod.spline.design/Z61Y4LW5nGuNCM-9/scene.splinecode" />
+        <div className="fixed inset-0 z-0 bg-transparent">
+          {/* Background Spline scene (new) - sits behind the robot Spline */}
+          <div className="absolute inset-0 z-0 spline-bg pointer-events-none" aria-hidden>
+            <Spline scene="https://prod.spline.design/H1QS3S-3GFJMB3sJ/scene.splinecode" />
+          </div>
+
+          {/* Foreground robot Spline - uses existing scene but sits above the spline-bg */}
+          <div className="absolute inset-0 z-10 robot-spline-wrapper pointer-events-none" aria-hidden>
+            <div className="robot-spline absolute inset-0">
+              <Spline scene="https://prod.spline.design/Z61Y4LW5nGuNCM-9/scene.splinecode" />
+            </div>
+          </div>
+
           {/* Particles sit above the Spline canvas and above the gradient so they're visible, but below the content */}
           <ParticlesBG className="absolute inset-0 z-30 pointer-events-none" />
           <div className="absolute inset-0 z-20 bg-gradient-to-b from-black/60 via-black/30 to-black pointer-events-none" />
@@ -195,6 +206,7 @@ export default function Landing() {
           >
             Subscribe to our newsletter for exclusive insights, market analysis, and strategic updates
           </motion.p>
+          
 
           <motion.form 
             onSubmit={handleSubscribe}
