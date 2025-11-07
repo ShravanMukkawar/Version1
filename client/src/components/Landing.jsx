@@ -1,232 +1,293 @@
-import React, { useState, useRef, useEffect } from 'react'
-import Spline from '@splinetool/react-spline'
-import ParticlesBG from './Particles'
-import BitcoinBurst from './BitcoinBurst'
-import PixelBlast from './PixelBlast'
+import React, { useState, useRef, useEffect, Suspense } from 'react'
 import { motion } from 'framer-motion'
+
+// PixelBlast Component
+const PixelBlast = ({
+  variant = 'circle',
+  pixelSize = 6,
+  color = '#6366F1',
+  patternScale = 3,
+  patternDensity = 1.2,
+  pixelSizeJitter = 0.5,
+  enableRipples = true,
+  rippleSpeed = 0.4,
+  rippleThickness = 0.12,
+  rippleIntensityScale = 1.5,
+  liquid = true,
+  liquidStrength = 0.12,
+  liquidRadius = 1.2,
+  liquidWobbleSpeed = 5,
+  speed = 0.6,
+  edgeFade = 0.25,
+  transparent = true,
+}) => {
+  const canvasRef = useRef(null)
+
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+
+    const ctx = canvas.getContext('2d')
+    let animationFrameId
+    let time = 0
+
+    const setCanvasSize = () => {
+      canvas.width = window.innerWidth
+      canvas.height = window.innerHeight
+    }
+    setCanvasSize()
+    window.addEventListener('resize', setCanvasSize)
+
+    const draw = () => {
+      if (!transparent) {
+        ctx.fillStyle = '#000000'
+        ctx.fillRect(0, 0, canvas.width, canvas.height)
+      } else {
+        ctx.clearRect(0, 0, canvas.width, canvas.height)
+      }
+
+      const cols = Math.ceil(canvas.width / (pixelSize * patternScale))
+      const rows = Math.ceil(canvas.height / (pixelSize * patternScale))
+
+      for (let x = 0; x < cols; x++) {
+        for (let y = 0; y < rows; y++) {
+          const px = x * pixelSize * patternScale
+          const py = y * pixelSize * patternScale
+
+          let intensity = 0
+
+          if (variant === 'circle') {
+            const distance = Math.sqrt(
+              Math.pow(px - canvas.width / 2, 2) + Math.pow(py - canvas.height / 2, 2)
+            )
+            intensity = Math.sin(distance * 0.01 * patternDensity - time * speed) * 0.5 + 0.5
+          } else if (variant === 'wave') {
+            intensity = Math.sin(px * 0.01 * patternDensity - time * speed) * 0.5 + 0.5
+          }
+
+          if (enableRipples) {
+            const ripple =
+              Math.sin(
+                Math.sqrt(
+                  Math.pow(px - canvas.width / 2, 2) + Math.pow(py - canvas.height / 2, 2)
+                ) *
+                  rippleThickness -
+                  time * rippleSpeed
+              ) *
+                0.5 +
+              0.5
+            intensity = intensity * ripple * rippleIntensityScale
+          }
+
+          if (liquid) {
+            const wobbleX = Math.sin(time * liquidWobbleSpeed + py * 0.01) * liquidRadius
+            const wobbleY = Math.cos(time * liquidWobbleSpeed + px * 0.01) * liquidRadius
+            const liquidDist = Math.sqrt(
+              Math.pow(px + wobbleX - canvas.width / 2, 2) +
+                Math.pow(py + wobbleY - canvas.height / 2, 2)
+            )
+            intensity += Math.sin(liquidDist * 0.02 - time * speed) * liquidStrength
+          }
+
+          intensity = Math.max(0, Math.min(1, intensity))
+
+          if (edgeFade > 0) {
+            const distFromCenter = Math.sqrt(
+              Math.pow(px - canvas.width / 2, 2) + Math.pow(py - canvas.height / 2, 2)
+            )
+            const maxDist = Math.sqrt(
+              Math.pow(canvas.width / 2, 2) + Math.pow(canvas.height / 2, 2)
+            )
+            const fadeFactor = 1 - Math.pow(distFromCenter / maxDist, 1 / edgeFade)
+            intensity *= fadeFactor
+          }
+
+          const jitter = (Math.random() - 0.5) * pixelSizeJitter
+          const size = pixelSize + jitter
+
+          const rgb = color.match(/\w\w/g).map((x) => parseInt(x, 16))
+          ctx.fillStyle = `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${intensity})`
+          ctx.fillRect(px, py, size, size)
+        }
+      }
+
+      time += 0.02
+      animationFrameId = requestAnimationFrame(draw)
+    }
+
+    draw()
+
+    return () => {
+      cancelAnimationFrame(animationFrameId)
+      window.removeEventListener('resize', setCanvasSize)
+    }
+  }, [
+    variant,
+    pixelSize,
+    color,
+    patternScale,
+    patternDensity,
+    pixelSizeJitter,
+    enableRipples,
+    rippleSpeed,
+    rippleThickness,
+    rippleIntensityScale,
+    liquid,
+    liquidStrength,
+    liquidRadius,
+    liquidWobbleSpeed,
+    speed,
+    edgeFade,
+    transparent,
+  ])
+
+  return <canvas ref={canvasRef} className="w-full h-full" />
+}
+
+// Simple Particles Component
+const ParticlesBG = ({ className }) => {
+  const canvasRef = useRef(null)
+
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+
+    const ctx = canvas.getContext('2d')
+    canvas.width = window.innerWidth
+    canvas.height = window.innerHeight
+
+    const particles = []
+    const particleCount = 50
+
+    for (let i = 0; i < particleCount; i++) {
+      particles.push({
+        x: Math.random() * canvas.width,
+        y: Math.random() * canvas.height,
+        vx: (Math.random() - 0.5) * 0.5,
+        vy: (Math.random() - 0.5) * 0.5,
+        radius: Math.random() * 2 + 1,
+      })
+    }
+
+    let animationFrameId
+
+    const animate = () => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height)
+
+      particles.forEach((p) => {
+        p.x += p.vx
+        p.y += p.vy
+
+        if (p.x < 0 || p.x > canvas.width) p.vx *= -1
+        if (p.y < 0 || p.y > canvas.height) p.vy *= -1
+
+        ctx.beginPath()
+        ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2)
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.3)'
+        ctx.fill()
+      })
+
+      animationFrameId = requestAnimationFrame(animate)
+    }
+
+    animate()
+
+    const handleResize = () => {
+      canvas.width = window.innerWidth
+      canvas.height = window.innerHeight
+    }
+    window.addEventListener('resize', handleResize)
+
+    return () => {
+      cancelAnimationFrame(animationFrameId)
+      window.removeEventListener('resize', handleResize)
+    }
+  }, [])
+
+  return <canvas ref={canvasRef} className={className} />
+}
+
+// BitcoinBurst Component (placeholder animation)
+const BitcoinBurst = () => {
+  return null // Placeholder for bitcoin burst effect
+}
+
+// Robot component with intersection observer and guarded dynamic import
+const Robot = ({ onLoad }) => {
+  const [isInView, setIsInView] = useState(false)
+  const [SplineComp, setSplineComp] = useState(null)
+  const [splineError, setSplineError] = useState(null)
+  const robotRef = useRef(null)
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setIsInView(true)
+        }
+      },
+      { threshold: 0.1 }
+    )
+
+    if (robotRef.current) observer.observe(robotRef.current)
+    return () => {
+      if (robotRef.current) observer.unobserve(robotRef.current)
+    }
+  }, [])
+
+  // when in view, dynamically import the Spline component with error handling
+  useEffect(() => {
+    if (!isInView || SplineComp || splineError) return
+
+    let cancelled = false
+  import('@splinetool/react-spline')
+      .then((mod) => {
+        if (cancelled) return
+        setSplineComp(() => mod.default || mod)
+      })
+      .catch((err) => {
+        console.error('Failed to load @splinetool/react-spline:', err)
+        if (!cancelled) setSplineError(err)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [isInView, SplineComp, splineError])
+
+  return (
+    <div ref={robotRef} className="h-full w-full">
+      {isInView ? (
+        SplineComp ? (
+          <SplineComp scene="https://prod.spline.design/NCQe8dUMReBbPYxM/scene.splinecode" onLoad={onLoad} />
+        ) : splineError ? (
+          <div className="h-full w-full flex items-center justify-center text-center text-white/70">
+            <div>
+              <div className="text-lg font-semibold">3D scene unavailable</div>
+              <div className="mt-2 text-sm">{String(splineError.message || splineError)}</div>
+            </div>
+          </div>
+        ) : (
+          <div className="h-full w-full flex items-center justify-center">
+            <div className="w-64 h-64 rounded-full bg-gradient-to-br from-indigo-500/20 to-purple-500/20 backdrop-blur-sm border border-indigo-500/30 flex items-center justify-center">
+              <div className="text-6xl animate-pulse">🤖</div>
+            </div>
+          </div>
+        )
+      ) : (
+        <div className="h-full w-full flex items-center justify-center">
+          <div className="w-64 h-64 rounded-full bg-gradient-to-br from-indigo-500/20 to-purple-500/20 backdrop-blur-sm border border-indigo-500/30 flex items-center justify-center">
+            <div className="text-6xl animate-pulse">🤖</div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
 
 export default function Landing() {
   const [email, setEmail] = useState('')
   const [subscribed, setSubscribed] = useState(false)
-  const robotRef = useRef(null)
-  const splineInstance = useRef(null)
-  const headNode = useRef(null)
-  const upperNode = useRef(null)
-
-  // helper: recursively search a three.js scene graph for a node by name
-  function findNodeByName(root, name) {
-    if (!root) return null
-    if (root.name === name) return root
-    if (root.children && root.children.length) {
-      for (let i = 0; i < root.children.length; i++) {
-        const found = findNodeByName(root.children[i], name)
-        if (found) return found
-      }
-    }
-    return null
-  }
-  const splineAppRef = useRef(null)
-
-  // Handle Spline load to get app reference
-  function onSplineLoad(splineApp) {
-    splineAppRef.current = splineApp
-  }
-
-  // Smooth mouse follower for robot interaction - upper body only
-  useEffect(() => {
-    const wrapper = robotRef.current
-    if (!wrapper) return
-
-    let canvas = wrapper.querySelector('canvas')
-    let attempts = 0
-    const findCanvas = () => {
-      if (!canvas) canvas = wrapper.querySelector('canvas')
-      attempts += 1
-      if (!canvas && attempts < 10) setTimeout(findCanvas, 150)
-    }
-    if (!canvas) findCanvas()
-
-    const rect = () => wrapper.getBoundingClientRect()
-
-    // Start from center
-    const centerX = () => wrapper.clientWidth / 2
-    const centerY = () => wrapper.clientHeight / 2
-    
-    let target = { x: centerX(), y: centerY() }
-    let current = { ...target }
-  const normalSmoothing = 0.015 // normal lerp (0.03 - 0.15)
-  const enterSmoothing = 0.01 // very slow approach when re-entering (smaller => slower)
-
-  // keep track whether pointer is inside the wrapper bounds
-  let wasInside = false
-    let enterMode = false
-    let enterFrames = 0
-  const enterDuration = 120 // frames to remain in slow-approach mode (increase for slower re-entry)
-  let mouseWasOutsideWindow = false
-
-    function onMove(e) {
-      const r = rect()
-      const clientX = e.clientX
-      const clientY = e.clientY
-
-      // determine if pointer is inside wrapper
-      const inside = clientX >= r.left && clientX <= r.right && clientY >= r.top && clientY <= r.bottom
-
-      const mouseX = clientX - r.left
-      const mouseY = clientY - r.top
-
-      // Calculate offset from center
-      const offsetX = mouseX - centerX()
-      const offsetY = mouseY - centerY()
-
-      // Limit the movement range for upper body only
-      const maxHorizontal = wrapper.clientWidth * 0.15 // 15% of width
-      const maxVertical = wrapper.clientHeight * 0.25 // 25% of height
-
-      // Clamp the offsets
-      const clampedX = Math.max(-maxHorizontal, Math.min(maxHorizontal, offsetX))
-      const clampedY = Math.max(-maxVertical, Math.min(maxVertical, offsetY))
-
-      // If pointer just entered the wrapper area, enable slow enter mode so robot doesn't snap
-      if (inside && !wasInside) {
-        enterMode = true
-        enterFrames = 0
-      }
-
-      // If the mouse was outside the browser window and has just moved inside,
-      // force enterMode so the robot pans slowly to the new location.
-      if (mouseWasOutsideWindow) {
-        enterMode = true
-        enterFrames = 0
-        mouseWasOutsideWindow = false
-      }
-
-      wasInside = inside
-
-      // Apply clamped position relative to center
-      target.x = centerX() + clampedX
-      target.y = centerY() + clampedY
-    }
-
-    function onLeave() {
-      // Mark as outside; keep the current target so the robot continues
-      // looking at the last known location instead of snapping back to center.
-      wasInside = false
-      // do not change `target` here — keep the last position
-    }
-
-    function onWindowOut(e) {
-      // relatedTarget === null indicates the pointer moved out of the window
-      if (!e) return
-      if (e.relatedTarget === null) {
-        mouseWasOutsideWindow = true
-      }
-    }
-
-    let raf = null
-    function frame() {
-      // choose smoothing depending on whether we're in the slow enter approach
-      const smoothing = enterMode ? enterSmoothing : normalSmoothing
-
-      // lerp (linear interpolation)
-      current.x += (target.x - current.x) * smoothing
-      current.y += (target.y - current.y) * smoothing
-
-      if (enterMode) {
-        enterFrames += 1
-        if (enterFrames > enterDuration) {
-          enterMode = false
-        }
-      }
-
-      if (canvas) {
-        const r = rect()
-
-        // Reduce the magnitude of the pointer we forward to the Spline canvas
-        // so leg/whole-body reactions driven by the scene are milder.
-        // legScale: 0.5 => half the movement currently seen
-        const legScale = 0.5
-
-        // Compute center and deltas
-        const centerClientX = Math.round(r.left + centerX())
-        const centerClientY = Math.round(r.top + centerY())
-        const deltaX = current.x - centerX()
-        const deltaY = current.y - centerY()
-
-        // Cap how far we dispatch to avoid extreme rotations (prevents ~180° flips)
-        const maxDispatchX = wrapper.clientWidth * 0.25
-        const maxDispatchY = wrapper.clientHeight * 0.35
-
-        const scaledX = Math.max(-maxDispatchX, Math.min(maxDispatchX, deltaX * legScale))
-        const scaledY = Math.max(-maxDispatchY, Math.min(maxDispatchY, deltaY * legScale))
-
-        const clientX = Math.round(centerClientX + scaledX)
-        const clientY = Math.round(centerClientY + scaledY)
-
-        // dispatch smoothed (and scaled) pointer event to Spline canvas
-        try {
-          const ev = new PointerEvent('pointermove', {
-            bubbles: true,
-            clientX,
-            clientY,
-            pageX: clientX,
-            pageY: clientY,
-            pointerType: 'mouse'
-          })
-          canvas.dispatchEvent(ev)
-        } catch (err) {
-          // fallback for older browsers
-          const ev = document.createEvent('MouseEvents')
-          ev.initMouseEvent('mousemove', true, true, window, 0, 0, 0, clientX, clientY, false, false, false, false, 0, null)
-          canvas.dispatchEvent(ev)
-        }
-      }
-
-      // Head-only look: rotate the head node smoothly toward the smoothed
-      // cursor position without rotating the torso/legs. This keeps body
-      // static while the head tracks the cursor.
-      try {
-        if (headNode.current && headNode.current.rotation) {
-          const cx = wrapper.clientWidth / 2
-          const cy = wrapper.clientHeight / 2
-          // normalized -1..1 based on current smoothed position relative to center
-          const nx = Math.max(-1, Math.min(1, (current.x - cx) / (wrapper.clientWidth * 0.5)))
-          const ny = Math.max(-1, Math.min(1, (current.y - cy) / (wrapper.clientHeight * 0.5)))
-
-          // Head rotation limits (radians) - tune these for desired look range
-          const maxHeadYaw = 0.45 // left/right
-          const maxHeadPitch = 0.28 // up/down
-
-          const targetYaw = nx * maxHeadYaw
-          const targetPitch = -ny * maxHeadPitch
-
-          // Smoothly lerp head rotation toward target (smaller factor = slower)
-          const headLerp = 0.08
-          headNode.current.rotation.y += (targetYaw - headNode.current.rotation.y) * headLerp
-          headNode.current.rotation.x += (targetPitch - headNode.current.rotation.x) * headLerp
-        }
-      } catch (e) {
-        // ignore if head node not available or rotation not writable
-      }
-
-      raf = requestAnimationFrame(frame)
-    }
-
-    // Listen on window so mouse movements over overlays (like the navbar)
-    // are still captured and forwarded to the robot wrapper. Also track
-    // when the pointer leaves the browser so we can enable a slow re-entry.
-    window.addEventListener('mousemove', onMove)
-    window.addEventListener('mouseleave', onLeave)
-    window.addEventListener('mouseout', onWindowOut)
-    raf = requestAnimationFrame(frame)
-
-    return () => {
-      window.removeEventListener('mousemove', onMove)
-      window.removeEventListener('mouseleave', onLeave)
-      window.removeEventListener('mouseout', onWindowOut)
-      if (raf) cancelAnimationFrame(raf)
-    }
-  }, [])
 
   const handleSubscribe = (e) => {
     e.preventDefault()
@@ -254,9 +315,10 @@ export default function Landing() {
     <div className="relative min-h-screen bg-black text-white overflow-x-hidden">
       {/* Hero Section */}
       <header className="relative min-h-screen flex items-center justify-center">
-        <div className="fixed inset-0 z-0 bg-transparent">
-          {/* PixelBlast Background */}
-          <div className="absolute inset-0 z-0 pointer-events-none" aria-hidden="true">
+        {/* Background Layer Structure (z-index ordering) */}
+        <div className="fixed inset-0">
+          {/* Layer 1: PixelBlast Background (z-0) */}
+          <div className="absolute inset-0 z-0">
             <PixelBlast
               variant="circle"
               pixelSize={6}
@@ -278,60 +340,26 @@ export default function Landing() {
             />
           </div>
 
-          {/* Foreground robot Spline with smooth mouse tracking */}
-          <div 
-            ref={robotRef} 
-            className="absolute inset-0 z-10 robot-spline-wrapper pointer-events-auto" 
-            aria-hidden="true"
-          >
-            <div className="robot-spline absolute inset-0">
-                <Spline
-                  scene="https://prod.spline.design/Z61Y4LW5nGuNCM-9/scene.splinecode"
-                  onLoad={(s) => {
-                    // capture instance and log structure to help if names differ
-                    splineInstance.current = s
-                    try {
-                      // try to print a compact tree to console for inspection
-                      console.log('Spline instance', s)
-                      if (s && s.scene) console.log('s.scene children:', s.scene.children)
-                    } catch (err) {
-                      console.log('Spline loaded (could not dump scene):', err)
-                    }
-
-                    // attempt best-effort find of head/upper body nodes by common names
-                    try {
-                      const root = s.scene || (s?.app && s.app.scene)
-                      if (root) {
-                        const headNames = ['Head', 'head', 'Head_GRP', 'head_grp', 'Head_Mesh']
-                        const upperNames = ['Torso', 'UpperBody', 'Chest', 'Spine', 'Upper_Body']
-                        for (const n of headNames) {
-                          const found = findNodeByName(root, n)
-                          if (found) { headNode.current = found; break }
-                        }
-                        for (const n of upperNames) {
-                          const found = findNodeByName(root, n)
-                          if (found) { upperNode.current = found; break }
-                        }
-                        console.log('Head node:', headNode.current, 'Upper node:', upperNode.current)
-                      }
-                    } catch (e) {
-                      console.warn('Could not auto-find head/upper nodes', e)
-                    }
-                  }}
-              />
-            </div>
+          {/* Layer 2: Robot/3D Scene (z-10) */}
+          <div className="absolute inset-0 z-10">
+            <Robot />
           </div>
 
-          {/* Particles layer */}
-          <ParticlesBG className="absolute inset-0 z-30 pointer-events-none" />
+          {/* Layer 3: Gradient Overlay (z-20) */}
           <div className="absolute inset-0 z-20 bg-gradient-to-b from-black/60 via-black/30 to-black pointer-events-none" />
+
+          {/* Layer 4: Particles (z-30) */}
+          <div className="absolute inset-0 z-30 pointer-events-none">
+            <ParticlesBG />
+          </div>
         </div>
         
+        {/* Content (z-40) */}
         <motion.div 
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8, delay: 0.2 }}
-          className="relative z-40 max-w-7xl mx-auto px-6 py-32 text-center pointer-events-none"
+          className="relative z-40 max-w-7xl mx-auto px-6 py-32 text-center"
         >
           <motion.h1 
             initial={{ opacity: 0, y: 20 }}
@@ -371,7 +399,7 @@ export default function Landing() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.9 }}
-            className="flex flex-col sm:flex-row gap-4 justify-center items-center pointer-events-auto"
+            className="flex flex-col sm:flex-row gap-4 justify-center items-center"
           >
             <a 
               href="#services" 
@@ -388,11 +416,12 @@ export default function Landing() {
           </motion.div>
         </motion.div>
 
+        {/* Scroll Indicator (z-50) */}
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 1, delay: 1.2 }}
-          className="absolute bottom-10 left-1/2 transform -translate-x-1/2 z-50 pointer-events-none"
+          className="absolute bottom-10 left-1/2 transform -translate-x-1/2 z-50"
         >
           <motion.div
             animate={{ y: [0, 10, 0] }}
